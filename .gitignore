@@ -1,4 +1,10 @@
-# Repo dependent
+# Mac OS 
 .DS_Store
-*~              
+
+# Editors
+*~             
 .vscode
+
+# Loggings
+*.log
+*.csv
