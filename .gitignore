@@ -1,0 +1,4 @@
+# Repo dependent
+.DS_Store
+*~              
+.vscode
