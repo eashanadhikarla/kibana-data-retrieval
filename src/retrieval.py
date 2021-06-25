@@ -19,6 +19,7 @@ import argparse
 import logging
 import errno
 
+
 try:
     os.makedirs('../data')
 except OSError as e:
