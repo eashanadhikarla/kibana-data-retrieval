@@ -2,9 +2,9 @@
 **
 ** Project Lead: Eashan Adhikarla
 ** Mentor: Ezra Kissel
-** 
+**
 ** Date Created: June 17' 2021
-** Last Modified: June 24' 2021 
+** Last Modified: June 24' 2021
 **
 '''
 
@@ -21,12 +21,12 @@ import errno
 
 
 try:
-    os.makedirs('../data')
+    os.makedirs('data')
 except OSError as e:
     if e.errno != errno.EEXIST:
         raise
 
-logging.basicConfig(filename='../data/iperf3.log', level=logging.DEBUG)
+logging.basicConfig(filename='data/iperf3.log', level=logging.DEBUG)
 
 # Create the elasticsearch client
 HOST = 'nersc-tbn-6.testbed100.es.net'
@@ -36,10 +36,10 @@ MAX_TRIES = 10
 VERIFY_CERTS = True
 RETRY = True
 
-es = Elasticsearch( host=HOST, port=PORT, 
-                    timeout=TIMEOUT, 
-                    max_retries=MAX_TRIES, 
-                    verify_certs=VERIFY_CERTS, 
+es = Elasticsearch( host=HOST, port=PORT,
+                    timeout=TIMEOUT,
+                    max_retries=MAX_TRIES,
+                    verify_certs=VERIFY_CERTS,
                     retry_on_timeout=RETRY
                   )
 
@@ -60,7 +60,7 @@ class clr:
     G   = '\033[36m' # Green
     W   = '\033[93m' # Warning
     F   = '\033[91m' # Fail
-    E   = '\033[0m'  # End 
+    E   = '\033[0m'  # End
     BD  = '\033[1m'  # Bold
     UL  = '\033[4m'  # Underline
 
@@ -88,7 +88,7 @@ class GETTER:
 
     def getIndexDetails(self, indexes, column_list, total_docs=10):
         df = pd.DataFrame(columns=column_list)
-        for i in range(1): # len(indexes)):
+        for i in range(len(indexes)):
             try:
                 # Given a index name, finds all the documents in the index
                 # index: Index name as a string
@@ -100,9 +100,9 @@ class GETTER:
                                 )
                 print(f"\n{indexes[i]} ---> {clr.G}{result['hits']['total']['value']}{clr.E} documents\n")
                 logging.info(f"\n{indexes[i]} ---> {clr.G}{result['hits']['total']['value']}{clr.E} documents\n")
-                
+
                 documents = [doc for doc in result['hits']['hits']]
-                
+
                 for j in range(len(documents)):
                     # ---------------------
                     # For each job/document
@@ -117,7 +117,7 @@ class GETTER:
                     start_dict = documents[j]['_source']['start']
                     num_streams = start_dict['test_start']['num_streams']
 
-                    # --------------------- 
+                    # ---------------------
                     # For each stream/flow
                     # ---------------------
                     # Intervals
@@ -128,7 +128,7 @@ class GETTER:
                             # 'sender': dict_keys(['retransmits', 'max_rtt', 'sender', 'start', 'bytes', 'mean_rtt', 'end'
                             #                      'max_snd_cwnd', 'bits_per_second', 'socket', 'seconds', 'min_rtt'])
                             # 'receiver': dict_keys(['end', 'bits_per_second', 'sender', 'start', 'socket', 'seconds', 'bytes'])
-                            
+
                             sender_start = documents[j]['_source']['end']['streams'][m]['sender']['start']
                             sender_end = documents[j]['_source']['end']['streams'][m]['sender']['end']
                             sender_retransmits = documents[j]['_source']['end']['streams'][m]['sender']['retransmits']
@@ -164,7 +164,7 @@ class GETTER:
                                             'receiver_bytes':receiver_bytes,
                                             'receiver_bps':receiver_bps
                                             }, ignore_index=True)
-                            
+
             except:
                 pass
             # print("\nTotal docs found: ", self.sum)
@@ -186,7 +186,7 @@ class GETTER:
 def main():
     print("\nStarting ELK testpoint stats retrieval...")
     logging.info("\nStarting ELK testpoint stats retrieval...")
-    
+
     parser = argparse.ArgumentParser(description='Testpoint Statistics')
     parser.add_argument('-t', '--term', default="iperf3*", type=str,
                         help='The search term to find the indexes {"*", "iperf3*", "jobmeta*", "bbrmon*"}')
@@ -198,7 +198,7 @@ def main():
     print(f"Chosen index type: {args.term}")
     logging.info(f"Chosen index type: {args.term}")
     get = GETTER(args.term)
-    
+
     # STEP 1. Get all the indices in the ELK given a term.
     indexes = get.getIndexList(args.term)
     for e,i in enumerate(indexes):
@@ -212,13 +212,13 @@ def main():
                           'receiver_start','receiver_end','receiver_seconds','receiver_bytes','receiver_bps',
                          ]
 
-    # STEP 2. getIndexDetails to retrieve the statistics of every testpoint 
+    # STEP 2. getIndexDetails to retrieve the statistics of every testpoint
     # and every stream/flow wrt index
     index_response = get.getIndexDetails(indexes, pandas_column_list)
 
     # STEP 3. Create a Pandas Dataframe to make it easier for the model to read.
     try:
-        index_response.to_csv('../data/'+str(args.term[:-1])+'.csv')
+        index_response.to_csv('data/'+str(args.term[:-1])+'.csv')
         print(f"{str(args.term[:-1])}.csv file written!")
     except:
         raise ValueError("Cannot write the file")
