@@ -122,6 +122,7 @@ class GETTER:
                             try:
                                 iter_uuid = jobmeta_documents[jobmetadoc]['_source']['iter_uuids']
                                 alias = jobmeta_documents[jobmetadoc]['_source']['alias']
+                                pacing = jobmeta_documents[jobmetadoc]['_source']['pacing'] 
 
                                 if uuid in iter_uuid:
                                     # Hostname
@@ -163,6 +164,7 @@ class GETTER:
                                                         'ALIAS':alias,
                                                         'TIMESTAMP':timestamp,
                                                         'STREAMS':num_streams,
+                                                        'PACING':pacing,
                                                         'THROUGHPUT (Sender)':sender_throughput,
                                                         'THROUGHPUT (Receiver)':receiver_throughput,
                                                         'LATENCY (min.)':sender_min_rtt,
@@ -205,6 +207,7 @@ class GETTER:
                                                                 'ALIAS':alias,
                                                                 'TIMESTAMP':timestamp,
                                                                 'STREAMS':num_streams,
+                                                                'PACING':pacing,
                                                                 'THROUGHPUT (Sender)':sender_throughput,
                                                                 'THROUGHPUT (Receiver)':receiver_throughput,
                                                                 'LATENCY (min.)':sender_min_rtt,
@@ -315,6 +318,7 @@ def main(verbose=False):
                           'ALIAS',
                           'TIMESTAMP',
                           'STREAMS',
+                          'PACING',
                           'THROUGHPUT (Sender)', 'THROUGHPUT (Receiver)',
                           'LATENCY (min.)', 'LATENCY (max.)', 'LATENCY (mean)',
                           'RETRANSMITS',
@@ -332,7 +336,7 @@ def main(verbose=False):
     # STEP 3. Create a Pandas Dataframe to make it easier for the model to read.
     # --------------------------------------------------------------------------
     if args.term=="*":
-        filename = "all"
+        filename = "statistics"
     else:
         filename = args.term[:-1]
 
