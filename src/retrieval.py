@@ -87,7 +87,20 @@ class GETTER:
             print (f"{clr.F}Empty dict!{clr.E}")
             logging.info (f"Empty dict!")
 
-    def getIndexDetails(self, iperf3, jobmeta, column_list, interval=False, total_docs=1000):
+    def getIndexDetails_bbrmon(self, bbrmon_pscheduler, bbrmon_jobmeta, column_list, interval=False, total_docs=10000):
+        df = pd.DataFrame(columns=column_list)
+
+        for i in range(len(bbrmon_jobmeta)):
+            try:
+                bbrmon_jobmeta_result = es.search(index=jobmeta[i],
+                                                  body={"query":{"match_all":{}}},
+                                                  size=total_docs,
+                                                  )
+                
+                bbrmon_jobmeta_documents = [doc for doc in bbrmon_jobmeta_result['hits']['hits']]
+                
+
+    def getIndexDetails(self, iperf3, jobmeta, column_list, interval=False, total_docs=10000):
         df = pd.DataFrame(columns=column_list)
 
         for i in range(len(jobmeta)):
@@ -157,7 +170,7 @@ class GETTER:
                                         receiver_bytes = iperf3_documents[iperfdoc]['_source']['end']['streams'][0]['receiver']['bytes']
 
                                         # print (f"uuid: {uuid}\nhostname: {hostname}\nalias: {alias}\ntimestamp: {timestamp}\nnum_streams: {num_streams}\nsender_throughput: {sender_throughput}\nreceiver_throughput: {receiver_throughput}\nlatency (min): {sender_min_rtt}\nlatency (max): {sender_max_rtt}\nlatency (mean): {sender_mean_rtt}\nsender_retransmits: {sender_retransmits}\nsender_congestion: {sender_congestion}\nreceiver_congestion: {receiver_congestion}\nreceiver_bytes: {receiver_bytes}\n\n")
-                                        logging.info (f"uuid: {uuid}\nhostname: {hostname}\nalias: {alias}\ntimestamp: {timestamp}\nnum_streams: {num_streams}\nsender_throughput: {sender_throughput}\nreceiver_throughput: {receiver_throughput}\nlatency (min): {sender_min_rtt}\nlatency (max): {sender_max_rtt}\nlatency (mean): {sender_mean_rtt}\nsender_retransmits: {sender_retransmits}\nsender_congestion: {sender_congestion}\nreceiver_congestion: {receiver_congestion}\nreceiver_bytes: {receiver_bytes}\n\n")
+                                        # logging.info (f"uuid: {uuid}\nhostname: {hostname}\nalias: {alias}\ntimestamp: {timestamp}\nnum_streams: {num_streams}\nsender_throughput: {sender_throughput}\nreceiver_throughput: {receiver_throughput}\nlatency (min): {sender_min_rtt}\nlatency (max): {sender_max_rtt}\nlatency (mean): {sender_mean_rtt}\nsender_retransmits: {sender_retransmits}\nsender_congestion: {sender_congestion}\nreceiver_congestion: {receiver_congestion}\nreceiver_bytes: {receiver_bytes}\n\n")
 
                                         df = df.append({'UUID':uuid,
                                                         'HOSTNAME':hostname,
@@ -233,7 +246,7 @@ class TIMEWINDOW:
         self.to_date = to_date
     
     def timeFormatter(self):
-        if self.to_date=="empty": # is None:
+        if self.to_date=="empty":  #is None:
             curr = datetime.datetime.now()
             self.to_date = f"{curr.year}-{curr.month}-{curr.day}"
         
@@ -330,7 +343,7 @@ def main(verbose=False):
     # STEP 2. getIndexDetails to retrieve the statistics of every testpoint
     # and every stream/flow wrt index
     # ---------------------------------------------------------------------
-    index_response = get.getIndexDetails(iperf3, jobmeta, pandas_column_list, interval=args.interval, total_docs=1000)
+    index_response = get.getIndexDetails(iperf3, jobmeta, pandas_column_list, interval=False, total_docs=10000)
 
     # --------------------------------------------------------------------------
     # STEP 3. Create a Pandas Dataframe to make it easier for the model to read.
