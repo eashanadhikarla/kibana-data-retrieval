@@ -125,18 +125,23 @@ def train(epoch):
     
     for xs, ys in trainloader:
         xs, ys = xs.to(device), ys.to(device)
+        
         # --- Model ---
         optimizer.zero_grad()
         output =  model(xs)
+        
         # --- Loss ---
         loss = criterion(ys, output)
         loss.backward()
         optimizer.step()
+        
         # --- Statistics ---
         running_loss += loss.item() * xs.size(0)
+
         _, predicted = torch.max(output.data, 1)
         total += ys.size(0)
         correct += (predicted == ys).sum().item()
+    
     epoch_loss  = running_loss/len(traindata)
     acc = (100 * correct / total)
     return epoch_loss, acc
@@ -154,10 +159,13 @@ def test(epoch):
             
             # --- Model ---
             output = model(xs)
+            
             # --- Loss ---
             loss = criterion(ys, output)
+            
             # --- Statistics ---
             running_loss += loss.item() * xs.size(0)
+            
             _, predicted = torch.max(output.data, 1)
             total += ys.size(0)
             correct += (predicted == ys).sum().item()
