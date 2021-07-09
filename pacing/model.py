@@ -95,7 +95,8 @@ X_test  = torch.tensor(X_test)
 y_test  = torch.tensor(y_test) 
 
 class CustomTensorDataset(Dataset):
-    """TensorDataset with support of transforms.
+    """
+    TensorDataset with support of transforms.
     """
     def __init__(self, tensors, transform=None):
         assert all(tensors[0].size(0) == tensor.size(0) for tensor in tensors)
