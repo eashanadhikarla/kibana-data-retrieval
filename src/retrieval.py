@@ -4,7 +4,7 @@
 ** Mentor: Ezra Kissel
 **
 ** Date Created: June 17' 2021
-** Last Modified: June 30' 2021
+** Last Modified: July 9' 2021
 **
 '''
 
@@ -98,6 +98,21 @@ class GETTER:
                                                   )
 
                 bbrmon_jobmeta_documents = [doc for doc in bbrmon_jobmeta_result['hits']['hits']]
+
+                for j in range(len(bbrmon_pscheduler)):
+                    bbrmon_pscheduler_result = es.search(index=bbrmon_pscheduler[j],
+                                                         body={"query":{"match_all":{}}},
+                                                         size=total_docs,
+                                                        )
+                    bbrmon_pscheduler_documents = [docs for docs in bbrmon_pscheduler_result['hits']['hits']]
+
+                    for bbrmondoc in range(len(bbrmon_pscheduler_documents)):
+                    # ---------------------
+                    # For each job/document
+                    # ---------------------
+                    # Format:
+                    
+
             except:
                 pass
 
