@@ -1,7 +1,7 @@
 # Mac OS 
 .DS_Store
-checkpoint
-data
+# checkpoint
+# data
 
 # Editors
 *~             
@@ -9,5 +9,5 @@ data
 
 # Loggings
 *.log
-*.csv
-*.png
+# *.csv
+# *.png
