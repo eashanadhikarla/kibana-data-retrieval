@@ -3,6 +3,7 @@ from __future__ import absolute_import, print_function
 # --- System ---
 import os
 import sys
+import time
 import warnings
 
 # --- Utility ---
@@ -36,6 +37,8 @@ from tqdm import tqdm
 from datetime import datetime
 from torch.utils.data import random_split
 
+# -----------------------------------------------------------
+# random weight initialization
 def seed_everything(seed=42):
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
@@ -49,9 +52,10 @@ seed_everything()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 root_dir = os.getcwd()
 
+# -----------------------------------------------------------
+# data loading and preprocessing
 dataPath = "data/statistics (pacing).csv"
 df = pd.read_csv(dataPath)
-# columnList = df.columns
 
 # Dropping columns that are not required at the moment
 df = df.drop(columns=[ 'Unnamed: 0', 'UUID', 'HOSTNAME', 'ALIAS', 'TIMESTAMP',
@@ -77,24 +81,21 @@ minmax_scale = preprocessing.MinMaxScaler().fit(df[['THROUGHPUT (Sender)', 'LATE
 df_minmax = minmax_scale.transform(df[['THROUGHPUT (Sender)', 'LATENCY (mean)', 'RETRANSMITS', 'STREAMS', 'CONGESTION (Sender)']])
 
 final_df = pd.DataFrame(df_minmax, columns=['THROUGHPUT (Sender)', 'LATENCY (mean)', 'RETRANSMITS', 'STREAMS', 'CONGESTION (Sender)'])
-final_df.head(5)
-
 X = final_df[['THROUGHPUT (Sender)', 'LATENCY (mean)', 'RETRANSMITS', 'STREAMS', 'CONGESTION (Sender)']].values
 
-EPOCH = 50
-BATCH = 32
-LEARNING_RATE = 0.001
-SAVE = False
-BESTLOSS = 10
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=1)
+X_train, X_test, y_train, y_test = train_test_split(X, y, 
+                                                    test_size=0.25,
+                                                    random_state=1)
 
 X_train = torch.tensor(X_train)
 y_train = torch.tensor(y_train)
 X_test  = torch.tensor(X_test)
 y_test  = torch.tensor(y_test) 
 
-class CustomTensorDataset(Dataset):
+# -----------------------------------------------------------
+
+# Custom data loader for ELK stack dataset
+class PacingDataset(Dataset):
     """
     TensorDataset with support of transforms.
     """
@@ -116,112 +117,150 @@ class CustomTensorDataset(Dataset):
     def __len__(self):
         return self.tensors[0].size(0)
 
+# -----------------------------------------------------------
 
-# Dataset w/o any tranformations
-traindata   = CustomTensorDataset(tensors=(X_train, y_train), transform=None)
-trainloader = torch.utils.data.DataLoader(traindata, batch_size=BATCH)
+# accuracy computation
+def accuracy(model, ds, pct):
+    # assumes model.eval()
+    # percent correct within pct of true pacing rate
+    n_correct = 0; n_wrong = 0
 
-testdata    = CustomTensorDataset(tensors=(X_test, y_test), transform=None)
-testloader = torch.utils.data.DataLoader(testdata, batch_size=BATCH)
+    for i in range(len(ds)):
+        (X, Y) = ds[i]                # (predictors, target)
+        X, Y = X.float(), Y.float()
+        with torch.no_grad():
+            output = model(X)         # computed price
 
+        abs_delta = np.abs(output.item() - Y.item())
+        max_allow = np.abs(pct * Y.item())
+        if abs_delta < max_allow:
+            n_correct +=1
+        else:
+            n_wrong += 1
+
+    acc = (n_correct * 1.0) / (n_correct + n_wrong)
+    return acc*100
+
+# -----------------------------------------------------------
+
+# model definition
 class PacingOptimizer(nn.Module):
+    # https://visualstudiomagazine.com/Articles/2021/02/11/pytorch-define.aspx?Page=2
     def __init__(self):
         super(PacingOptimizer, self).__init__()
-        self.fc1 = torch.nn.Linear (5, 32)
-        self.fc2 = torch.nn.Linear (32, 64)
-        self.fc3 = torch.nn.Linear (64, 32)
-        self.fc4 = torch.nn.Linear (32, 1)
+        self.hid1 = torch.nn.Linear(5, 32)
+        self.drop1 = torch.nn.Dropout(0.25)
+        self.hid2 = torch.nn.Linear(32, 64)
+        self.drop2 = torch.nn.Dropout(0.50)
+        self.hid3 = torch.nn.Linear(64, 32)
+        self.oupt = torch.nn.Linear(32, 1)
+
+        torch.nn.init.xavier_uniform_(self.hid1.weight)
+        torch.nn.init.zeros_(self.hid1.bias)
+        torch.nn.init.xavier_uniform_(self.hid2.weight)
+        torch.nn.init.zeros_(self.hid2.bias)
+        torch.nn.init.xavier_uniform_(self.hid3.weight)
+        torch.nn.init.zeros_(self.hid3.bias)
+        torch.nn.init.xavier_uniform_(self.oupt.weight)
+        torch.nn.init.zeros_(self.oupt.bias)
 
     def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
-        x = self.fc4(x)
-        return x
+        z = self.drop1(torch.relu(self.hid1(x)))
+        z = self.drop2(torch.relu(self.hid2(z)))
+        z = torch.relu(self.hid3(z))
+        z = self.oupt(z)  # no activation
+        return z
+
+# -----------------------------------------------------------
 
 model = PacingOptimizer()
-# print( f"====================\nTotal params: {len(list(model.parameters()))}\n====================" )
 
-criterion = nn.MSELoss(reduction='mean')
+# Hyperparameters
+EPOCH = 500
+BATCH = 128
+LEARNING_RATE = 0.005
+
+INTERVAL = 50
+SAVE = False
+BESTLOSS = 10
+
+criterion = nn.MSELoss(reduction='mean') # 'mean', 'sum'. 'none'
+# optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE, momentum=0.9)
 
-def train(epoch):
+print("\nBatch Size = %3d " % BATCH)
+print("Loss = " + str(criterion))
+print("Pptimizer = Adam")
+print("Max Epochs = %3d " % EPOCH)
+print("Learning Rate = %0.3f " % LEARNING_RATE)
 
-    acc, correct, loss = 0.0, 0.0, 0.0
-    running_loss, total = 0.0, 0
+# Dataset w/o any tranformations
+traindata   = PacingDataset(tensors=(X_train, y_train), transform=None)
+trainloader = torch.utils.data.DataLoader(traindata, batch_size=BATCH)
 
-    model.train()
+testdata    = PacingDataset(tensors=(X_test, y_test), transform=None)
+testloader = torch.utils.data.DataLoader(testdata, batch_size=BATCH)
 
-    for xs, ys in trainloader:
-        xs, ys = xs.to(device).float(), ys.to(device).float()
+print("\nStarting training with saved checkpoints")
 
-        # --- Model ---
-        optimizer.zero_grad()
-        output =  model(xs)
+model.train()
+for epoch in range(0, EPOCH):
+    torch.manual_seed(epoch+1) # recovery reproducibility
+    epoch_loss = 0             # for one full epoch
 
-        # --- Loss ---
-        loss = criterion(ys, output)
-        loss.backward()
-        optimizer.step()
+    for (batch_idx, batch) in enumerate(trainloader):
+        (xs, ys) = batch                # (predictors, targets)
+        xs, ys = xs.float(), ys.float()
+        optimizer.zero_grad()           # prepare gradients
 
-        # --- Statistics ---
-        running_loss += loss.item() * xs.size(0)
+        output = model(xs)              # predicted pacing rate
+        loss = criterion(ys, output)    # avg per item in batch
 
-        # _, predicted = torch.max(output.data, 1)
-        # total += ys.size(0)
-        # correct += (predicted == ys).sum().item()
+        epoch_loss += loss.item()       # accumulate averages
+        loss.backward()                 # compute gradients
+        optimizer.step()                # update weights
 
-    epoch_loss  = running_loss/len(traindata)
-    # acc = (100 * correct / total)
-    return epoch_loss #, acc
+    if epoch % INTERVAL == 0:
+        print("Epoch = %4d    Loss = %0.4f" % (epoch, epoch_loss))
 
-def test(epoch):
+        # save checkpoint
+        dt = time.strftime("%Y_%m_%d-%H_%M_%S")
+        fn = str(dt) + str("-") + str(epoch) + "_ckpt.pt"
 
-    acc, correct, loss = 0.0, 0.0, 0.0
-    running_loss, total = 0.0, 0
+        info_dict = {
+            'epoch' : epoch,
+            'model_state' : model.state_dict(),
+            'optimizer_state' : optimizer.state_dict()
+        }
+        if SAVE:
+            torch.save(info_dict, fn)
 
+print("\nDone")
+
+# evaluate model accuracy
+model.eval()
+gap = 0.50
+acc_train = accuracy(model, traindata, gap)
+print(f"Accuracy (within {gap:.2f}) on train data = {acc_train:.2f}%")
+
+
+# make prediction
+tput, lat, loss, streams, cong = 0.149677, 0.577766, 1.00000, 0.0, 1.0
+print(f"\nPredicting pacing rate for:\n\
+    (norm. values)\n\
+    throughput = {tput}\n\
+    latency = {lat}\n\
+    loss = {loss}\n\
+    congestion = {cong}\n\
+    streams = {streams}")
+
+# converting the sample to tensor array
+ukn = np.array([[tput, lat, loss, streams, cong]], dtype=np.float32)
+sample = torch.tensor(ukn, dtype=torch.float32).to(device)
+
+# testing the sample
+with torch.no_grad():
     model.eval()
-
-    with torch.no_grad():
-        for xs, ys in testloader:
-            xs, ys = xs.to(device).float(), ys.to(device).float()
-
-            # --- Model ---
-            output = model(xs)
-
-            # --- Loss ---
-            loss = criterion(ys, output)
-
-            # --- Statistics ---
-            running_loss += loss.item() * xs.size(0)
-
-            # predicted = torch.max(output.data, 1)[1]
-            # total += ys.size(0)
-            # correct += (predicted == ys).sum().item()
-            print(f"Pred: {output}, Target: {ys}")
-
-        epoch_loss  = running_loss/len(testdata)
-    # acc = (100 * correct / total)
-    return epoch_loss #, acc
-
-if not os.path.isdir(str(root_dir)+'/checkpoint'):
-    os.mkdir(str(root_dir)+'/checkpoint')
-
-print()
-print("Epoch", "TR-loss", "TS-loss", sep=' '*8, end="\n")
-
-for epoch in range(EPOCH):
-
-    trainloss = train(epoch)
-    testloss  = test(epoch)
-
-    print(f"{epoch+0:03}/{EPOCH}", f"{trainloss:.4f}", f"{testloss:.4f}", sep=' '*8, end="\n")
-
-    if SAVE:
-        # Saving the model.
-        is_best = testloss < BESTLOSS
-        BESTLOSS = min(testloss, BESTLOSS)
-        if is_best:
-            torch.save(model.state_dict(), str(root_dir)+"/checkpoint/pacing_"+str(epoch)+".pt")
-            print("Model Saved.")
-print("="*50)
+    pred = model(sample)
+pred = pred.item()
+print(f"\nPacing rate: {pred:.4f}\n")

@@ -10,3 +10,4 @@ data
 # Loggings
 *.log
 *.csv
+*.png
