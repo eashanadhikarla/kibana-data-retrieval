@@ -18,7 +18,7 @@ warnings.filterwarnings('ignore')
 from sklearn.model_selection import train_test_split
 from sklearn import preprocessing
 
-# --- Plot --
+# --- Plot ---
 import matplotlib.pyplot as plt
 # %matplotlib inline
 import seaborn as sns
