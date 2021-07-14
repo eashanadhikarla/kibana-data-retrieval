@@ -309,7 +309,7 @@ class TIMEWINDOW:
 
 def main(verbose=False):
     print("Starting ELK testpoint stats retrieval...")
-    logging.info ("Starting ELK testpoint stats retrieval...")
+    # logging.info ("Starting ELK testpoint stats retrieval...")
 
     parser = argparse.ArgumentParser(description='Testpoint Statistics')
     parser.add_argument('-t', '--term', default="*", type=str,
@@ -323,9 +323,10 @@ def main(verbose=False):
     parser.add_argument('-o','--type', default="iperf3", type=str,
                         help='Chose option for pulling type of index details {iperf3, bbrmon}')
     args = parser.parse_args()
+    print("")
     for arg in vars(args):
-        print (f"{arg} {getattr(args, arg) : ^25}")
-        logging.info (f"{arg} {getattr(args, arg)}")
+        print ("%-9s: %s"%(arg,getattr(args, arg)))
+        # logging.info ("%-9s: %s"%(arg,getattr(args, arg)))
 
     get = GETTER(args.term)
 
