@@ -244,7 +244,7 @@ model = VAERegressor()
 # model = PacingOptimizer()
 
 # Hyperparameters
-EPOCH = 1000
+EPOCH = 100
 BATCH = 64
 LEARNING_RATE = 0.005
 
@@ -327,20 +327,26 @@ print("\nDone")
 
 # evaluate model accuracy
 model.eval()
+
 gap = 0.50
 acc_train = accuracy(model, traindata, gap)
 print(f"Accuracy (within {gap:.2f}) on train data = {acc_train:.2f}%")
 
 
-# make prediction
-tput, lat, loss, streams, cong = 0.149677, 0.577766, 1.00000, 0.0, 1.0
+# make prediction on a random sample from test data
+pivot = random.randint(0, len(testdata))
+print("Pivot: ", pivot)
+x, y = testdata[pivot]
+tput, lat, loss, streams, cong = x.detach().numpy()
+# tput, lat, loss, streams, cong = 0.149677, 0.577766, 1.00000, 0.0, 1.0
 print(f"\nPredicting pacing rate for:\n\
     (norm. values)\n\
     throughput = {tput}\n\
     latency = {lat}\n\
     loss = {loss}\n\
     congestion = {cong}\n\
-    streams = {streams}")
+    streams = {streams}\n\
+    pacing = {y}")
 
 # converting the sample to tensor array
 ukn = np.array([[tput, lat, loss, streams, cong]], dtype=np.float32)
@@ -348,7 +354,6 @@ sample = torch.tensor(ukn, dtype=torch.float32).to(device)
 
 # testing the sample
 with torch.no_grad():
-    model.eval()
     pred, _, _, _ = model(sample)
 pred = pred.item()
-print(f"\nPacing rate: {pred:.4f}\n")
+print(f"\nPredicted Pacing rate: {pred:.4f}\nGround-truth Pacing rate: {y:.4f}\n")
