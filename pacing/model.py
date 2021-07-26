@@ -129,7 +129,7 @@ def accuracy(model, ds, pct):
         (X, Y) = ds[i]                # (predictors, target)
         X, Y = X.float(), Y.float()
         with torch.no_grad():
-            output = model(X)         # computed price
+            output, _, _, _ = model(X)         # computed price
 
         abs_delta = np.abs(output.item() - Y.item())
         max_allow = np.abs(pct * Y.item())
@@ -142,6 +142,74 @@ def accuracy(model, ds, pct):
     return acc*100
 
 # -----------------------------------------------------------
+
+input_feature = 5
+latent_feature = 16
+
+class VAERegressor(nn.Module):
+    def __init__(self):
+        super(VAERegressor, self).__init__()
+ 
+        # encoder
+        self.enc1 = nn.Linear(in_features=input_feature, out_features=128)
+        self.enc2 = nn.Linear(in_features=128, out_features=latent_feature*2)
+        # decoder
+        self.dec1 = nn.Linear(in_features=latent_feature, out_features=128)
+        self.dec2 = nn.Linear(in_features=128, out_features=5)
+        # Regressor
+        self.fc1 = torch.nn.Linear (5, 32)
+        self.fc2 = torch.nn.Linear (32, 1)
+
+        torch.nn.init.xavier_uniform_(self.enc1.weight)
+        torch.nn.init.zeros_(self.enc1.bias)
+        torch.nn.init.xavier_uniform_(self.enc2.weight)
+        torch.nn.init.zeros_(self.enc2.bias)
+        torch.nn.init.xavier_uniform_(self.dec1.weight)
+        torch.nn.init.zeros_(self.dec1.bias)
+        torch.nn.init.xavier_uniform_(self.dec2.weight)
+        torch.nn.init.zeros_(self.dec2.bias)
+        torch.nn.init.xavier_uniform_(self.fc1.weight)
+        torch.nn.init.zeros_(self.fc1.bias)
+        torch.nn.init.xavier_uniform_(self.fc2.weight)
+        torch.nn.init.zeros_(self.fc2.bias)
+
+    def reparameterize(self, mu, log_var):
+        """
+        :param mu: mean from the encoder's latent space
+        :param log_var: log variance from the encoder's latent space
+        """
+        std = torch.exp(0.5*log_var) # standard deviation
+        eps = torch.randn_like(std) # `randn_like` as we need the same size
+        sample = mu + (eps * std) # sampling as if coming from the input space
+        return sample
+ 
+    def forward(self, x):
+        
+        # encoding
+        x = self.enc1(x)
+        x = F.relu(x)
+        x = self.enc2(x).view(-1, 2, latent_feature)
+
+        # get `mu` and `log_var`
+        mu      = x[:, 0, :]    # the first feature values as mean
+        log_var = x[:, 1, :]    # the other feature values as variance
+
+        # get the latent vector through reparameterization
+        z = self.reparameterize(mu, log_var)
+ 
+        # decoding
+        x = self.dec1(z)
+        x = F.relu(x)
+        x = self.dec2(x)
+        recon = torch.sigmoid(x)
+
+        # regressor
+        x = self.fc1(recon)
+        x = F.relu(x)
+        x = self.fc2(x)
+
+        return x, recon, mu, log_var
+
 
 # model definition
 class PacingOptimizer(nn.Module):
@@ -172,19 +240,35 @@ class PacingOptimizer(nn.Module):
         return z
 
 # -----------------------------------------------------------
-
-model = PacingOptimizer()
+model = VAERegressor()
+# model = PacingOptimizer()
 
 # Hyperparameters
-EPOCH = 500
-BATCH = 128
+EPOCH = 1000
+BATCH = 64
 LEARNING_RATE = 0.005
 
 INTERVAL = 50
 SAVE = False
 BESTLOSS = 10
 
-criterion = nn.MSELoss(reduction='mean') # 'mean', 'sum'. 'none'
+CE  = nn.CrossEntropyLoss()
+BCE = nn.BCELoss(reduction='mean')
+MSE = nn.MSELoss(reduction='mean') # 'mean', 'sum'. 'none'
+
+def criterion(bce_loss, mu, logvar):
+    """
+    This function will add the reconstruction loss (BCELoss) and the 
+    KL-Divergence.
+    KL-Divergence = 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
+    :param bce_loss: recontruction loss
+    :param mu: the mean from the latent vector
+    :param logvar: log variance from the latent vector
+    """
+    BCE = bce_loss 
+    KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+    return BCE + KLD
+
 # optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE, momentum=0.9)
 
@@ -213,8 +297,12 @@ for epoch in range(0, EPOCH):
         xs, ys = xs.float(), ys.float()
         optimizer.zero_grad()           # prepare gradients
 
-        output = model(xs)              # predicted pacing rate
-        loss = criterion(ys, output)    # avg per item in batch
+        # output = model(xs)            # predicted pacing rate
+        # loss = criterion(ys, output)  # avg per item in batch
+        output, recon, mu, log_var = model(xs)
+        mse_loss = MSE(ys, output)
+        bce_loss = BCE(recon, xs)
+        loss = criterion(bce_loss, mu, log_var) + mse_loss
 
         epoch_loss += loss.item()       # accumulate averages
         loss.backward()                 # compute gradients
@@ -261,6 +349,6 @@ sample = torch.tensor(ukn, dtype=torch.float32).to(device)
 # testing the sample
 with torch.no_grad():
     model.eval()
-    pred = model(sample)
+    pred, _, _, _ = model(sample)
 pred = pred.item()
 print(f"\nPacing rate: {pred:.4f}\n")
