@@ -4,7 +4,7 @@
 ** Mentor: Ezra Kissel
 **
 ** Date Created: June 17' 2021
-** Last Modified: June 30' 2021
+** Last Modified: July 13' 2021
 **
 '''
 
@@ -20,7 +20,6 @@ import logging
 import errno
 import re, datetime
 import glob
-
 
 try:
     os.makedirs('data')
@@ -136,7 +135,7 @@ class GETTER:
                     print("Exception: ", e)
         return df
 
-    def getIndexDetails(self, iperf3, jobmeta, column_list, interval=False, total_docs=1000):
+    def getIndexDetails(self, iperf3, jobmeta, column_list, interval=False, total_docs=10000):
         df = pd.DataFrame(columns=column_list)
 
         for i in range(len(jobmeta)):
@@ -160,7 +159,7 @@ class GETTER:
                     # print (f"\n{iperf3[i]} ---> {clr.G}{iperf3_result['hits']['total']['value']}{clr.E} documents\n")
                     iperf3_documents = [doc for doc in iperf3_result['hits']['hits']]
 
-                    receiver_throughput, sender_min_rtt, sender_mean_rtt, sender_max_rtt, sender_retransmits = 0.0, 0.0, 0.0, 0.0, 0.0
+                    receiver_throughput, sender_min_rtt, sender_max_rtt, sender_mean_rtt, sender_retransmits = 0.0, 0.0, 0.0, 0.0, 0.0
                     for iperfdoc in range(len(iperf3_documents)):
                         # ---------------------
                         # For each job/document
@@ -188,9 +187,7 @@ class GETTER:
 
                                     if not interval:
                                         # Bits per second (bps) is the throughput
-                                        sender_throughput = iperf3_documents[iperfdoc]['_source']['end']['sum_received']['bits_per_second']
-                                        # print(sender_throughput)
-
+                                        sender_throughput = iperf3_documents[iperfdoc]['_source']['end']['sum_received'] # [0]['sender']['bits_per_second']
                                         for s in range(num_streams):
                                             receiver_throughput += iperf3_documents[iperfdoc]['_source']['end']['streams'][s]['receiver']['bits_per_second']
 
@@ -210,7 +207,7 @@ class GETTER:
                                         receiver_bytes = iperf3_documents[iperfdoc]['_source']['end']['streams'][0]['receiver']['bytes']
 
                                         # print (f"uuid: {uuid}\nhostname: {hostname}\nalias: {alias}\ntimestamp: {timestamp}\nnum_streams: {num_streams}\nsender_throughput: {sender_throughput}\nreceiver_throughput: {receiver_throughput}\nlatency (min): {sender_min_rtt}\nlatency (max): {sender_max_rtt}\nlatency (mean): {sender_mean_rtt}\nsender_retransmits: {sender_retransmits}\nsender_congestion: {sender_congestion}\nreceiver_congestion: {receiver_congestion}\nreceiver_bytes: {receiver_bytes}\n\n")
-                                        logging.info (f"uuid: {uuid}\nhostname: {hostname}\nalias: {alias}\ntimestamp: {timestamp}\nnum_streams: {num_streams}\nsender_throughput: {sender_throughput}\nreceiver_throughput: {receiver_throughput}\nlatency (min): {sender_min_rtt}\nlatency (max): {sender_max_rtt}\nlatency (mean): {sender_mean_rtt}\nsender_retransmits: {sender_retransmits}\nsender_congestion: {sender_congestion}\nreceiver_congestion: {receiver_congestion}\nreceiver_bytes: {receiver_bytes}\n\n")
+                                        # logging.info (f"uuid: {uuid}\nhostname: {hostname}\nalias: {alias}\ntimestamp: {timestamp}\nnum_streams: {num_streams}\nsender_throughput: {sender_throughput}\nreceiver_throughput: {receiver_throughput}\nlatency (min): {sender_min_rtt}\nlatency (max): {sender_max_rtt}\nlatency (mean): {sender_mean_rtt}\nsender_retransmits: {sender_retransmits}\nsender_congestion: {sender_congestion}\nreceiver_congestion: {receiver_congestion}\nreceiver_bytes: {receiver_bytes}\n\n")
 
                                         df = df.append({'UUID':uuid,
                                                         'HOSTNAME':hostname,
@@ -270,10 +267,10 @@ class GETTER:
                                                                 'CONGESTION (Receiver)':receiver_congestion,
                                                                 'RETRANSMITS':sender_retransmits,
                                                                 }, ignore_index=True)
-                            except:
-                                pass
-            except:
-                pass
+                            except Exception as e:
+                                print(e)
+            except Exception as e:
+                print(e)
         return df
 
 
@@ -286,7 +283,7 @@ class TIMEWINDOW:
         self.to_date = to_date
 
     def timeFormatter(self):
-        if self.to_date=="empty": # is None:
+        if self.to_date=="empty":  #is None:
             curr = datetime.datetime.now()
             self.to_date = f"{curr.year}-{curr.month}-{curr.day}"
 
@@ -314,7 +311,7 @@ class TIMEWINDOW:
 
 def main(verbose=False):
     print("Starting ELK testpoint stats retrieval...")
-    logging.info ("Starting ELK testpoint stats retrieval...")
+    # logging.info ("Starting ELK testpoint stats retrieval...")
 
     parser = argparse.ArgumentParser(description='Testpoint Statistics')
     parser.add_argument('-t', '--term', default="*", type=str,
@@ -381,7 +378,6 @@ def main(verbose=False):
                           'CONGESTION (Sender)', 'CONGESTION (Receiver)',
                           'BYTES (Receiver)',
                          ]
-
     bbrmon_column_list = ['UUID',
                           'SRC HOSTNAME',
                           'DST HOSTNAME',
@@ -404,13 +400,17 @@ def main(verbose=False):
     elif args.type == "iperf3": # considering else as iperf3 only*
         index_response = get.getIndexDetails(iperf3, jobmeta, iperf3_column_list, interval=False, total_docs=10000)
 
+    print(f"Records: {clr.G}{len(index_response)}{clr.E}")
     # --------------------------------------------------------------------------
-    # STEP 3. Create a Pandas Dataframe to make it easier for the model to read.
+    # STEP 3. Writer to write the dataframe into a csv file
+    # takes care of the naming, if ran the script multiple times
     # --------------------------------------------------------------------------
+    # files = os.listdir("data")
+    
     files = glob.glob("data/*.csv") # Reading all the previously written files
     last_filename = sorted(files)[-1] # Get the last file name
-    
-    num = int(last_filename.split("-")[1].split(".")[0]) # Extract the number from the last filename
+
+    num = 5 # int(last_filename.split("-")[1].split(".")[0]) # Extract the number from the last filename
 
     if args.term=="*" and type(num)==int:
         filename = "statistics-"+str(num+1)
