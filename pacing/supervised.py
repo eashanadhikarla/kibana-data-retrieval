@@ -97,7 +97,7 @@ y_test  = torch.tensor(y_test)
 # Hyperparameters
 EPOCH = 1000
 BATCH = 512
-LEARNING_RATE = 0.1
+LEARNING_RATE = 0.01
 
 INTERVAL = 50
 SAVE = False
@@ -116,11 +116,11 @@ testloader = torch.utils.data.DataLoader(testdata, batch_size=1) # BATCH)
 
 inputFea = len(traindata[0][0])
 model = PacingClassifier (nc=num_of_classes, inputFeatures=inputFea)
-model = resnet50(device=device)
+# model = resnet50(device=device)
 print(model)
 
 optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE, momentum=0.9, weight_decay=5e-4, nesterov=True)
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=200, gamma=0.1)
+# scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=200, gamma=0.1)
 
 print("\nBatch Size = %3d " % BATCH)
 print("Loss = " + str(CE))
@@ -148,7 +148,7 @@ for epoch in range(0, EPOCH):
         loss.backward()                 # compute gradients
         optimizer.step()                # update weights
     
-    scheduler.step()
+    # scheduler.step()
     if epoch % INTERVAL == 0:
         print("Epoch = %4d    Loss = %0.4f" % (epoch, epoch_loss))
 

@@ -30,8 +30,9 @@ class PacingClassifier (nn.Module):
         self.fc1 = torch.nn.Linear(inputFeatures, 32)
         self.fc2 = torch.nn.Linear(32, 256)
         self.fc3 = torch.nn.Linear(256, 512)
-        self.fc4 = torch.nn.Linear(512, 256)
-        self.fc5 = torch.nn.Linear(256, nc)
+        self.fc4 = torch.nn.Linear(512, 512)
+        self.fc5 = torch.nn.Linear(512, 256)
+        self.fc6 = torch.nn.Linear(256, nc)
 
         torch.nn.init.xavier_uniform_(self.fc1.weight)
         torch.nn.init.zeros_(self.fc1.bias)
@@ -43,6 +44,8 @@ class PacingClassifier (nn.Module):
         torch.nn.init.zeros_(self.fc4.bias)
         torch.nn.init.xavier_uniform_(self.fc5.weight)
         torch.nn.init.zeros_(self.fc5.bias)
+        torch.nn.init.xavier_uniform_(self.fc6.weight)
+        torch.nn.init.zeros_(self.fc6.bias)
 
     def forward(self, x):
         z = self.fc1(x)
@@ -53,7 +56,9 @@ class PacingClassifier (nn.Module):
         z = torch.relu(z)
         z = self.fc4(z)
         z = torch.relu(z)
-        z = self.fc5(z)  # no activation
+        z = self.fc5(z)
+        z = torch.relu(z)
+        z = self.fc6(z)  # no activation
         return z
 
 # # model definition
