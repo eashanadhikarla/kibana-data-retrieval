@@ -120,7 +120,7 @@ model = PacingClassifier (nc=num_of_classes, inputFeatures=inputFea)
 print(model)
 
 optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE, momentum=0.9, weight_decay=5e-4, nesterov=True)
-# scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=200, gamma=0.1)
+scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[350,500], gamma=0.05)
 
 print("\nBatch Size = %3d " % BATCH)
 print("Loss = " + str(CE))
@@ -148,7 +148,7 @@ for epoch in range(0, EPOCH):
         loss.backward()                 # compute gradients
         optimizer.step()                # update weights
     
-    # scheduler.step()
+    scheduler.step()
     if epoch % INTERVAL == 0:
         print("Epoch = %4d    Loss = %0.4f" % (epoch, epoch_loss))
 
