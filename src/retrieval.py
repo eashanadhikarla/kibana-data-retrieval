@@ -407,7 +407,7 @@ def main(verbose=False):
     # --------------------------------------------------------------------------
     # STEP 3. Create a Pandas Dataframe to make it easier for the model to read.
     # --------------------------------------------------------------------------
-    files = glob.glob("data/*.csv") # Reading all the previously written files
+    files = glob.glob("../data/*.csv") # Reading all the previously written files
     last_filename = sorted(files)[-1] # Get the last file name
     
     num = int(last_filename.split("-")[1].split(".")[0]) # Extract the number from the last filename
